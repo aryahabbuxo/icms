@@ -1,12 +1,6 @@
 // Routes that are wired but whose screens land later in the plan (Person B doc, Step 4).
 import { ComingSoon } from "../components/Ui";
 
-export const NewClaim = () => <ComingSoon title="File a claim" subtitle="Saturday 11:00–2:00"
-  items={["3-step wizard: policy → incident details + narrative (EN / ಕನ್ನಡ / हिंदी) → documents", "Analysing animation, then the AI result card"]} />;
-export const ClaimDetail = () => <ComingSoon title="Claim detail" subtitle="Saturday 11:00–2:00"
-  items={["Status timeline with hashes", "AI result card, documents, settlement"]} />;
-export const PolicyDetail = () => <ComingSoon title="Policy detail" subtitle="Saturday 11:00–2:00"
-  items={["Remaining cover bar, payments table, Pay premium modal"]} />;
 export const AdjusterQueue = () => <ComingSoon title="Review queue" subtitle="Saturday 5:00–10:00"
   items={["Claims sorted by fraud score, duplicate flags, urgency"]} />;
 export const AdjusterClaim = () => <ComingSoon title="Assess claim" subtitle="Sunday 1:00–6:00"

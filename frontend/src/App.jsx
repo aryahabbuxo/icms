@@ -5,6 +5,9 @@ import AppShell from "./components/AppShell";
 import RequireRole from "./components/RequireRole";
 import Login from "./pages/Login";
 import CustomerHome from "./pages/customer/CustomerHome";
+import NewClaim from "./pages/customer/NewClaim";
+import ClaimDetail from "./pages/customer/ClaimDetail";
+import PolicyDetail from "./pages/customer/PolicyDetail";
 import * as P from "./pages/Placeholders";
 import { HOME } from "./lib/format";
 
@@ -23,9 +26,9 @@ export default function App() {
             <Route element={<AppShell />}>
               <Route element={<RequireRole role="customer" />}>
                 <Route path="/c" element={<CustomerHome />} />
-                <Route path="/c/policies/:id" element={<P.PolicyDetail />} />
-                <Route path="/c/claims/new" element={<P.NewClaim />} />
-                <Route path="/c/claims/:id" element={<P.ClaimDetail />} />
+                <Route path="/c/policies/:id" element={<PolicyDetail />} />
+                <Route path="/c/claims/new" element={<NewClaim />} />
+                <Route path="/c/claims/:id" element={<ClaimDetail />} />
               </Route>
               <Route element={<RequireRole role="adjuster" />}>
                 <Route path="/adj" element={<P.AdjusterQueue />} />

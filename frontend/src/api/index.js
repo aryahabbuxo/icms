@@ -1,6 +1,7 @@
 // One function per endpoint in the Shared Spec. Pages import from here only.
 import { api, mock, USE_MOCKS } from "./client";
 import * as M from "./mocks";
+import { claimDetail, policyDetail, simulateFileClaim } from "./mockEngine";
 
 const get = (url, fallback, params) => (USE_MOCKS ? mock(fallback) : api.get(url, { params }).then((r) => r.data));
 const post = (url, body, fallback, ms) => (USE_MOCKS ? mock(fallback, ms) : api.post(url, body).then((r) => r.data));
@@ -15,12 +16,12 @@ export const login = (email, password) => {
 };
 
 export const getPolicies = () => get("/policies", M.mockPolicies);
-export const getPolicy = (id) => get(`/policies/${id}`, M.mockPolicies.find((p) => p.policy_id === +id) || M.mockPolicies[0]);
-export const payPremium = (id, body) => post(`/policies/${id}/payments`, body, { policy_id: id, payment_no: 3, status: "success" });
+export const getPolicy = (id) => get(`/policies/${id}`, policyDetail(id, M.mockClaims));
+export const payPremium = (id, body) => post(`/policies/${id}/payments`, body, { policy_id: +id, payment_no: 3, amount: body.amount, mode: body.mode, pay_date: new Date().toISOString().slice(0, 10), status: "success" }, 900);
 
 export const getClaims = (params) => get("/claims", M.mockClaims, params);
-export const getClaim = (id) => get(`/claims/${id}`, { ...M.mockClaimDetail, claim_id: +id });
-export const fileClaim = (body) => post("/claims", body, M.mockClaimResult, 1400);
+export const getClaim = (id) => get(`/claims/${id}`, claimDetail(id));
+export const fileClaim = (body) => (USE_MOCKS ? simulateFileClaim(body) : api.post("/claims", body).then((r) => r.data));
 export const uploadDocument = (id, file) => {
   if (USE_MOCKS) return mock({ claim_id: id, filename: file.name, ocr_text: "TOTAL Rs 85,000" }, 800);
   const fd = new FormData();
