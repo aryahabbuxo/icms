@@ -1,0 +1,66 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "DM Sans Variable", "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Fraunces Variable", "Fraunces", ui-serif, Georgia, serif;
+  --font-display: "Anton", "Impact", ui-sans-serif, sans-serif;
+
+  --color-paper: #f2eee3;   /* page */
+  --color-paper-2: #e9e3d3; /* raised surfaces, nav */
+  --color-ink: #1d2924;     /* text, outlines, primary buttons */
+  --color-ink-soft: #5d6862;
+  --color-line: #cfc7b3;    /* hairlines on paper */
+  --color-sky: #d3e6e3;     /* pool-blue panels */
+  --color-buoy: #d2492a;    /* lifebuoy red: brand accent, used sparingly */
+  --color-blush: #f2c9bf;
+  --color-night: #141a28;   /* footer + dark mode */
+  --color-night-2: #1d2436;
+  --color-ok: #3d7a55;
+  --color-warn: #b97a16;
+  --color-bad: #b9391f;
+}
+
+html, body, #root { height: 100%; }
+body {
+  @apply bg-paper font-sans text-ink antialiased dark:bg-night dark:text-paper;
+  font-size: 15px;
+  line-height: 1.55;
+}
+::selection { background: var(--color-blush); color: var(--color-ink); }
+:focus-visible { outline: 2px solid var(--color-buoy); outline-offset: 3px; border-radius: 6px; }
+
+@utility font-display-tight { font-family: var(--font-display); letter-spacing: 0.01em; line-height: 0.95; }
+
+/* Surfaces */
+@utility card { @apply rounded-[28px] bg-white/70 ring-1 ring-line/70 dark:bg-night-2 dark:ring-white/10; }
+@utility hairline { @apply border-line dark:border-white/10; }
+
+/* Buttons: black pill primary, outlined pill secondary (like the reference option lists) */
+@utility btn { @apply inline-flex items-center justify-center gap-2 rounded-full px-5 py-2.5 text-[14px] font-medium transition-colors disabled:cursor-not-allowed disabled:opacity-55; }
+@utility btn-primary { @apply btn bg-ink text-paper hover:bg-black dark:bg-paper dark:text-ink dark:hover:bg-white; }
+@utility btn-buoy { @apply btn bg-buoy text-white hover:bg-[#b93c20]; }
+@utility btn-ghost { @apply btn border-[1.5px] border-ink bg-transparent text-ink hover:bg-ink hover:text-paper dark:border-paper dark:text-paper dark:hover:bg-paper dark:hover:text-ink; }
+
+/* Forms */
+@utility input { @apply w-full rounded-2xl border-[1.5px] border-line bg-white/80 px-4 py-3 text-[15px] text-ink outline-none transition placeholder:text-ink-soft/60 focus:border-ink dark:border-white/15 dark:bg-night dark:text-paper dark:focus:border-paper; }
+@utility label { @apply mb-1.5 block text-[13px] font-medium text-ink-soft dark:text-paper/70; }
+
+@utility skeleton { @apply animate-pulse rounded-xl bg-paper-2 dark:bg-night-2; }
+
+/* Striped lifebuoy fill for big numerals (01-04) */
+@utility buoy-text {
+  background: repeating-linear-gradient(135deg, var(--color-buoy) 0 14px, #fff7f0 14px 26px);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 2px var(--color-ink);
+}
+@utility pool-text {
+  background: repeating-linear-gradient(0deg, var(--color-sky) 0 10px, #fff 10px 18px);
+  -webkit-background-clip: text; background-clip: text; color: transparent;
+  -webkit-text-stroke: 2px var(--color-ink);
+}
+
+@keyframes buoy-spin { to { transform: rotate(360deg); } }
+@utility spin-slow { animation: buoy-spin 1.6s linear infinite; }
+@media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
