@@ -27,3 +27,27 @@ python test_contract.py                              # must print: icms_ml contr
 pip install -r requirements.txt                      # real models (Saturday)
 python -m spacy download en_core_web_sm
 ```
+
+## Narrative data (B, for A's seed and for training)
+```bash
+cd ml/data
+python generate_narratives.py          # writes narratives.csv: 6,000 rows (text, category, urgency, entities)
+```
+In Python (A's `seed.py`):
+```python
+import sys; sys.path.append("ml/data")
+from generate_narratives import generate, paraphrase
+row = generate("accident")             # {"text", "category", "urgency", "entities"}
+dup = paraphrase(row["text"])           # reworded copy for planting duplicate fraud
+```
+Stage-ready English, Kannada and Hindi narratives: `ml/data/demo_narratives.md`.
+
+## Train the claim classifier (B)
+```bash
+cd ml
+pip install scikit-learn pandas joblib matplotlib
+python train_classifier.py        # ~30 s; writes models/*.joblib and reports/metrics.json + confusion matrix
+python test_contract.py           # must still print: icms_ml contract OK
+```
+Kannada/Hindi translation uses Gemini when `LLM_API_KEY` is set (free key: aistudio.google.com).
+Without a key, a keyword fallback still classifies those narratives (confidence 0.5).
