@@ -112,7 +112,7 @@ export default function AppShell() {
               </span>
               <div className="leading-tight">
                 <div className="text-[13px] font-medium">{user.name}</div>
-                <div className="text-[11px] text-ink-soft dark:text-paper/60">{ROLE_LABEL[user.role]}</div>
+                <div className="text-[11px] text-ink-soft dark:text-paper/60">{user.is_senior ? "Senior adjuster" : ROLE_LABEL[user.role]}</div>
               </div>
             </div>
             <button onClick={() => { logout(); navigate("/login"); }} aria-label="Sign out"

@@ -8,6 +8,8 @@ import CustomerHome from "./pages/customer/CustomerHome";
 import NewClaim from "./pages/customer/NewClaim";
 import ClaimDetail from "./pages/customer/ClaimDetail";
 import PolicyDetail from "./pages/customer/PolicyDetail";
+import AdjusterQueue from "./pages/adjuster/AdjusterQueue";
+import AdjusterClaim from "./pages/adjuster/AdjusterClaim";
 import * as P from "./pages/Placeholders";
 import { HOME } from "./lib/format";
 
@@ -31,8 +33,8 @@ export default function App() {
                 <Route path="/c/claims/:id" element={<ClaimDetail />} />
               </Route>
               <Route element={<RequireRole role="adjuster" />}>
-                <Route path="/adj" element={<P.AdjusterQueue />} />
-                <Route path="/adj/claims/:id" element={<P.AdjusterClaim />} />
+                <Route path="/adj" element={<AdjusterQueue />} />
+                <Route path="/adj/claims/:id" element={<AdjusterClaim />} />
               </Route>
               <Route element={<RequireRole role="admin" />}>
                 <Route path="/admin" element={<P.AdminHome />} />

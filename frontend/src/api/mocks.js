@@ -3,8 +3,8 @@
 
 export const demoUsers = {
   "priya@demo.in":   { user_id: 4, role: "customer", name: "Priya Sharma", customer_id: 12 },
-  "ramesh@demo.in":  { user_id: 7, role: "adjuster", name: "Ramesh K", adjuster_id: 7 },
-  "kavitha@demo.in": { user_id: 8, role: "adjuster", name: "Kavitha R", adjuster_id: 8 },
+  "ramesh@demo.in":  { user_id: 7, role: "adjuster", name: "Ramesh K", adjuster_id: 7, is_senior: false },
+  "kavitha@demo.in": { user_id: 8, role: "adjuster", name: "Kavitha R", adjuster_id: 8, is_senior: true },
   "admin@demo.in":   { user_id: 1, role: "admin", name: "Admin" },
   "suresh@demo.in":  { user_id: 9, role: "agent", name: "Suresh M", agent_id: 3 },
 };
@@ -65,9 +65,15 @@ export const mockClaimDetail = {
 export const mockQueue = [
   mockClaims[0],
   { claim_id: 5009, policy_id: 8123, policy_type: "motor", category: "theft", urgency: "medium", status: "under_review",
-    claimed_amount: 64000, fraud_score: 0.81, filed_date: "2026-10-21", customer_name: "Rahul Verma", city: "Bengaluru", duplicate_of: 4411 },
+    claimed_amount: 64000, fraud_score: 0.81, filed_date: "2026-10-21", incident_date: "2026-09-28", customer_name: "Rahul Verma", city: "Bengaluru", duplicate_of: 4411 },
+  { claim_id: 5007, policy_id: 8450, policy_type: "motor", category: "accident", urgency: "critical", status: "under_review",
+    claimed_amount: 142000, fraud_score: 0.47, filed_date: "2026-10-20", incident_date: "2026-10-19", customer_name: "Sneha Iyer", city: "Bengaluru", duplicate_of: null },
+  { claim_id: 5004, policy_id: 8011, policy_type: "motor", category: "flood", urgency: "medium", status: "under_review",
+    claimed_amount: 96000, fraud_score: 0.31, filed_date: "2026-10-20", incident_date: "2026-10-18", customer_name: "Karthik Rao", city: "Bengaluru", duplicate_of: null },
   { claim_id: 5001, policy_id: 7731, policy_type: "motor", category: "accident", urgency: "low", status: "info_requested",
-    claimed_amount: 12500, fraud_score: 0.22, filed_date: "2026-10-19", customer_name: "Anjali Nair", city: "Mysuru", duplicate_of: null },
+    claimed_amount: 12500, fraud_score: 0.22, filed_date: "2026-10-19", incident_date: "2026-10-17", customer_name: "Anjali Nair", city: "Mysuru", duplicate_of: null },
+  { claim_id: 4996, policy_id: 7602, policy_type: "motor", category: "theft", urgency: "medium", status: "under_review",
+    claimed_amount: 38000, fraud_score: 0.12, filed_date: "2026-10-18", incident_date: "2026-10-17", customer_name: "Manoj Kumar", city: "Bengaluru", duplicate_of: null },
 ];
 
 export const mockStats = {
