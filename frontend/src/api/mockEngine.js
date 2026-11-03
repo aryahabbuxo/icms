@@ -203,3 +203,84 @@ export function simulateAssess(id, body) {
   c.status = status;
   return new Promise((r) => setTimeout(() => r({ claim_id: +id, status }), 700));
 }
+
+// ---- admin: all claims, settlement (mirrors trg_settle_validate), NL questions, audit chain
+const ARJUN = {
+  claim_id: 9102, policy_id: 9003, policy_type: "health", category: "hospitalisation", urgency: "high", status: "approved",
+  claimed_amount: 52000, fraud_score: 0.18, filed_date: "2026-10-12", incident_date: "2026-10-08",
+  customer_name: "Arjun Rao", city: "Bengaluru", adjuster_name: "Kavitha R", duplicate_of: null,
+  approved_amount: 40000, sum_insured: 100000, settled_on_policy: 80000,
+};
+const EXTRA = [
+  ARJUN,
+  { claim_id: 4950, policy_id: 7410, policy_type: "property", category: "fire", urgency: "high", status: "settled", claimed_amount: 210000, fraud_score: 0.21, filed_date: "2026-10-02", customer_name: "Deepa Menon", city: "Mangaluru", adjuster_name: "Vikram S" },
+  { claim_id: 4931, policy_id: 7390, policy_type: "travel", category: "travel_loss", urgency: "low", status: "rejected", claimed_amount: 45000, fraud_score: 0.74, filed_date: "2026-09-27", customer_name: "Nikhil Jain", city: "Pune", adjuster_name: "Kavitha R" },
+];
+
+export function adminClaims() {
+  const seen = new Set();
+  const rows = [...queue(), ...claimsList().map((c) => ({ customer_name: "Priya Sharma", city: "Bengaluru", ...c })), ...mockQueue, ...EXTRA]
+    .filter((c) => !seen.has(c.claim_id) && seen.add(c.claim_id))
+    .map((c) => ({ ...c, status: store[c.claim_id]?.status ?? c.status,
+                   approved_amount: store[c.claim_id]?.assessments?.at(-1)?.approved_amount ?? c.approved_amount ?? c.claimed_amount }));
+  return rows.sort((a, b) => b.claim_id - a.claim_id);
+}
+
+export function simulateSettle(id, body) {
+  const c = adminClaims().find((x) => x.claim_id === +id);
+  const amt = Number(body.amount);
+  if (!c || c.status !== "approved") return mockFail("NOT_APPROVED", "Only approved claims can be settled");
+  if (amt > c.approved_amount) return mockFail("OVER_APPROVED", "Settlement exceeds the approved amount");
+  const sum = c.sum_insured ?? store[id]?.policy?.sum_insured ?? 200000;
+  const already = c.settled_on_policy ?? store[id]?.policy?.total_settled ?? 0;
+  if (already + amt > sum) return mockFail("SUM_INSURED_EXHAUSTED", "Total settlements would exceed the sum insured");
+  const d = claimDetail(id);
+  d.status = "settled";
+  d.settlement = { amount: amt, settle_date: nowIso().slice(0, 10), mode: body.mode };
+  d.timeline = [...d.timeline, { log_no: d.timeline.length + 1, old_status: "approved", new_status: "settled", changed_at: nowIso(), changed_by: "admin@demo.in", curr_hash: hash() }];
+  if (c === ARJUN || c.claim_id === 9102) ARJUN.status = "settled";
+  return new Promise((r) => setTimeout(() => r({ claim_id: +id, status: "settled", settlement_id: 3001 }), 800));
+}
+
+const NLQ = [
+  { match: /cit(y|ies).*(fraud|risk)|(fraud|risk).*cit(y|ies)/i,
+    sql: "SELECT city, COUNT(*) AS high_risk_claims\nFROM v_claim_dashboard\nWHERE fraud_score >= 0.7 AND YEAR(filed_date) = YEAR(CURDATE())\nGROUP BY city\nORDER BY high_risk_claims DESC\nLIMIT 5",
+    columns: ["city", "high_risk_claims"], rows: [["Bengaluru", 41], ["Mysuru", 22], ["Chennai", 17], ["Hyderabad", 13], ["Pune", 9]], chart_hint: "bar" },
+  { match: /month/i,
+    sql: "SELECT DATE_FORMAT(filed_date, '%b %Y') AS month, COUNT(*) AS claims\nFROM CLAIM\nWHERE filed_date >= CURDATE() - INTERVAL 6 MONTH\nGROUP BY YEAR(filed_date), MONTH(filed_date), month\nORDER BY YEAR(filed_date), MONTH(filed_date)",
+    columns: ["month", "claims"], rows: [["May 2026", 420], ["Jun 2026", 455], ["Jul 2026", 470], ["Aug 2026", 438], ["Sep 2026", 492], ["Oct 2026", 519]], chart_hint: "line" },
+  { match: /(days|time).*settle|settle.*(days|time)/i,
+    sql: "SELECT policy_type, ROUND(AVG(days_to_settle), 1) AS avg_days_to_settle\nFROM v_claim_dashboard\nWHERE settle_date IS NOT NULL\nGROUP BY policy_type\nORDER BY avg_days_to_settle DESC",
+    columns: ["policy_type", "avg_days_to_settle"], rows: [["property", 18.4], ["health", 12.1], ["motor", 9.8], ["travel", 7.2], ["life", 21.5]], chart_hint: "bar" },
+  { match: /adjuster/i,
+    sql: "SELECT name, open_claims\nFROM v_adjuster_workload\nORDER BY open_claims DESC\nLIMIT 5",
+    columns: ["name", "open_claims"], rows: [["Kavitha R", 18], ["Ramesh K", 15], ["Meera N", 12], ["Vikram S", 9], ["Arun P", 7]], chart_hint: "bar" },
+  { match: /pending|open|waiting/i,
+    sql: "SELECT COUNT(*) AS pending_claims\nFROM CLAIM c JOIN POLICY p ON p.policy_id = c.policy_id\nJOIN CUSTOMER cu ON cu.customer_id = p.customer_id\nWHERE c.status IN ('filed', 'under_review', 'info_requested')\n  AND cu.city = 'Bengaluru'",
+    columns: ["pending_claims"], rows: [[268]], chart_hint: "table" },
+  { match: /settled|paid|category|type/i,
+    sql: "SELECT c.category, SUM(s.amount) AS total_settled\nFROM SETTLEMENT s JOIN CLAIM c ON c.claim_id = s.claim_id\nGROUP BY c.category\nORDER BY total_settled DESC",
+    columns: ["category", "total_settled"], rows: [["hospitalisation", 18450000], ["accident", 9620000], ["fire", 7310000], ["flood", 4980000], ["theft", 3120000], ["travel_loss", 940000]], chart_hint: "bar" },
+];
+
+export function simulateNl(question) {
+  if (/\b(delete|drop|update|insert|truncate|alter|grant|password)\b/i.test(question))
+    return mockFail("UNSAFE_QUERY", "Only questions that read data are allowed. This request would change or expose protected data.", 700);
+  const hit = NLQ.find((q) => q.match.test(question));
+  if (!hit) return mockFail("NO_ANSWER", "I couldn't turn that into a query. Try one of the suggested questions.", 900);
+  const { match, ...res } = hit; // eslint-disable-line no-unused-vars
+  return new Promise((r) => setTimeout(() => r(structuredClone(res)), 1100));
+}
+
+export function verifyChainMock(id) {
+  const d = claimDetail(id);
+  const rows = (d.timeline || []).map((t) => ({ log_no: t.log_no, old_status: t.old_status, new_status: t.new_status, changed_at: t.changed_at, changed_by: t.changed_by, ok: true, stored_hash: t.curr_hash }));
+  if (+id === 5012 && rows.length >= 2) {   // demo: pretend someone edited log row 2 directly in MySQL
+    const broken = rows.length >= 3 ? 3 : 2;
+    rows.forEach((r) => { if (r.log_no >= broken) r.ok = r.log_no === broken ? false : true; });
+    const r = rows.find((x) => x.log_no === broken);
+    r.new_status = "approved"; r.recomputed_hash = "a07e3d41c95b"; r.stored_hash = "9f1c2b77e0aa";
+    return { claim_id: +id, valid: false, checked: rows.length, broken_at_log_no: broken, rows };
+  }
+  return { claim_id: +id, valid: true, checked: rows.length, broken_at_log_no: null, rows };
+}

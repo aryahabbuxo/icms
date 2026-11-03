@@ -59,3 +59,15 @@ and three report-ready charts in `ml/reports/`.
 
 Kannada/Hindi translation uses Gemini when `LLM_API_KEY` is set (free key: aistudio.google.com).
 Without a key, a keyword fallback still classifies those narratives (confidence 0.5).
+
+## OCR (bill / FIR images)
+Install the Tesseract program once:
+- Windows: installer from https://github.com/UB-Mannheim/tesseract/wiki , then set
+  `TESSERACT_CMD=C:\Program Files\Tesseract-OCR\tesseract.exe` in the backend's `.env`
+- Mac: `brew install tesseract`
+Then `pip install pytesseract pillow`. Without Tesseract, `ocr()` returns "" and uploads still work.
+A ready-made demo bill for the upload step: `ml/data/demo_bill.png` (total Rs 85,000).
+
+## Mock mode vs real backend
+`frontend/.env`: `VITE_USE_MOCKS=true` runs the whole demo in the browser (no database needed).
+Set it to `false` once A's FastAPI server is running on port 8000.

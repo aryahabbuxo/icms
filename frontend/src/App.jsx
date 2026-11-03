@@ -10,6 +10,11 @@ import ClaimDetail from "./pages/customer/ClaimDetail";
 import PolicyDetail from "./pages/customer/PolicyDetail";
 import AdjusterQueue from "./pages/adjuster/AdjusterQueue";
 import AdjusterClaim from "./pages/adjuster/AdjusterClaim";
+import AdminHome from "./pages/admin/AdminHome";
+import AdminClaims from "./pages/admin/AdminClaims";
+import AdminAsk from "./pages/admin/AdminAsk";
+import AdminAudit from "./pages/admin/AdminAudit";
+import AdminModels from "./pages/admin/AdminModels";
 import * as P from "./pages/Placeholders";
 import { HOME } from "./lib/format";
 
@@ -37,11 +42,11 @@ export default function App() {
                 <Route path="/adj/claims/:id" element={<AdjusterClaim />} />
               </Route>
               <Route element={<RequireRole role="admin" />}>
-                <Route path="/admin" element={<P.AdminHome />} />
-                <Route path="/admin/claims" element={<P.AdminClaims />} />
-                <Route path="/admin/ask" element={<P.AdminAsk />} />
-                <Route path="/admin/audit" element={<P.AdminAudit />} />
-                <Route path="/admin/models" element={<P.AdminModels />} />
+                <Route path="/admin" element={<AdminHome />} />
+                <Route path="/admin/claims" element={<AdminClaims />} />
+                <Route path="/admin/ask" element={<AdminAsk />} />
+                <Route path="/admin/audit" element={<AdminAudit />} />
+                <Route path="/admin/models" element={<AdminModels />} />
               </Route>
               <Route element={<RequireRole role="agent" />}>
                 <Route path="/agent" element={<P.AgentHome />} />

@@ -20,6 +20,14 @@
   --color-ok: #3d7a55;
   --color-warn: #b97a16;
   --color-bad: #b9391f;
+  /* chart marks (validated: scripts/validate_palette.js, light on #f2eee3, dark on #1d2436) */
+  --color-chart-1: #008a7b;
+  --color-chart-hi: #d2492a;
+}
+
+.dark {
+  --color-chart-1: #1fa595;
+  --color-chart-hi: #e8603d;
 }
 
 html, body, #root { height: 100%; }

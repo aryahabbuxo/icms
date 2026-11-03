@@ -1,7 +1,7 @@
 // One function per endpoint in the Shared Spec. Pages import from here only.
 import { api, mock, USE_MOCKS } from "./client";
 import * as M from "./mocks";
-import { claimDetail, claimsList, policyDetail, queue, simulateAssess, simulateFileClaim } from "./mockEngine";
+import { adminClaims, claimDetail, claimsList, policyDetail, queue, simulateAssess, simulateFileClaim, simulateNl, simulateSettle, verifyChainMock } from "./mockEngine";
 
 // `fallback` may be a function so mock data is computed at call time (it changes as you file and assess claims)
 const get = (url, fallback, params) => (USE_MOCKS ? mock(typeof fallback === "function" ? fallback() : fallback) : api.get(url, { params }).then((r) => r.data));
@@ -30,12 +30,14 @@ export const uploadDocument = (id, file) => {
   return api.post(`/claims/${id}/documents`, fd).then((r) => r.data);
 };
 export const getTimeline = (id) => get(`/claims/${id}/timeline`, M.mockClaimDetail.timeline);
-export const verifyChain = (id) => get(`/claims/${id}/verify-chain`, { ...M.mockVerifyChain, claim_id: +id });
+export const verifyChain = (id) => get(`/claims/${id}/verify-chain`, () => verifyChainMock(id));
 export const assessClaim = (id, body) => (USE_MOCKS ? simulateAssess(id, body) : api.post(`/claims/${id}/assess`, body).then((r) => r.data));
-export const settleClaim = (id, body) => post(`/claims/${id}/settle`, body, { claim_id: id, status: "settled" });
+export const settleClaim = (id, body) => (USE_MOCKS ? simulateSettle(id, body) : api.post(`/claims/${id}/settle`, body).then((r) => r.data));
+export const getAllClaims = (params) => get("/claims", adminClaims, params);
 
 export const getQueue = () => get("/adjusters/queue", queue);
 export const getStats = () => get("/admin/stats", M.mockStats);
-export const askNl = (question) => post("/admin/nl-query", { question }, M.mockNlq, 1100);
-export const getMetrics = () => get("/admin/ml-metrics", M.mockMetrics);
+export const askNl = (question) => (USE_MOCKS ? simulateNl(question) : api.post("/admin/nl-query", { question }).then((r) => r.data));
+// mock mode reads the real metrics.json written by the ML training scripts (copied to public/reports)
+export const getMetrics = () => (USE_MOCKS ? fetch("/reports/metrics.json").then((r) => r.json()) : api.get("/admin/ml-metrics").then((r) => r.data));
 export const getNotifications = () => get("/notifications", M.mockNotifications);

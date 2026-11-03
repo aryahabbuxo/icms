@@ -1,8 +1,8 @@
 """ICMS ML package. Signatures follow the Shared Spec ML contract and must not change.
 
 Status
-    REAL   preprocess, classify, score_fraud, extract_entities, embed, find_duplicate
-    STUB   ocr, nl_to_sql  (replaced next)
+    All functions are real. OCR needs the Tesseract program; NL-to-SQL and translation use an LLM when LLM_API_KEY
+    is set and fall back to templates / keywords without it, so the demo works offline.
 
 Models load lazily, once, on first use (A's backend can import this package instantly).
 """
@@ -179,13 +179,76 @@ def score_fraud(features: dict) -> dict:
     return {"score": score, "level": fraud_level(score), "reasons": explain(pipe, f, score)}
 
 
+# --------------------------------------------------------------------------- OCR
 def ocr(image_bytes: bytes) -> str:
-    return ""
+    """Text from a bill/FIR image with Tesseract. Returns "" if Tesseract or Pillow is missing, or on any error,
+    so an upload never fails because OCR did. (Install the Tesseract program separately; see README.)"""
+    try:
+        import io
+        import pytesseract
+        from PIL import Image, ImageOps
+        tess = os.getenv("TESSERACT_CMD")              # Windows: C:\\Program Files\\Tesseract-OCR\\tesseract.exe
+        if tess:
+            pytesseract.pytesseract.tesseract_cmd = tess
+        img = ImageOps.grayscale(Image.open(io.BytesIO(image_bytes)))
+        if img.width < 1200:                            # small phone photos read better when upscaled
+            img = img.resize((img.width * 2, img.height * 2))
+        return re.sub(r"[ \t]+", " ", pytesseract.image_to_string(img, config="--psm 6")).strip()
+    except Exception:
+        return ""
+
+
+def bill_total(text: str) -> float | None:
+    """Largest rupee amount in OCR text, e.g. to compare a bill's total with the claimed amount."""
+    nums = [float(m.replace(",", "")) for m in re.findall(r"(?:₹|Rs\.?|INR|TOTAL|Total|PAYABLE|Payable)[:\s]*([\d,]{3,}(?:\.\d{1,2})?)", text)]
+    return max(nums) if nums else None
+
+
+# --------------------------------------------------------------------------- NL -> SQL
+NL_EXAMPLES = [
+    ("how many claims are pending",
+     "SELECT COUNT(*) AS pending_claims FROM CLAIM WHERE status IN ('filed','under_review','info_requested')"),
+    ("top 5 cities by high fraud claims this year",
+     "SELECT city, COUNT(*) AS high_risk_claims FROM v_claim_dashboard WHERE fraud_score >= 0.7 AND YEAR(filed_date) = YEAR(CURDATE()) GROUP BY city ORDER BY high_risk_claims DESC LIMIT 5"),
+    ("claims filed per month over the last 6 months",
+     "SELECT DATE_FORMAT(filed_date, '%b %Y') AS month, COUNT(*) AS claims FROM CLAIM WHERE filed_date >= CURDATE() - INTERVAL 6 MONTH GROUP BY YEAR(filed_date), MONTH(filed_date), month ORDER BY YEAR(filed_date), MONTH(filed_date)"),
+    ("average days to settle by policy type",
+     "SELECT policy_type, ROUND(AVG(days_to_settle), 1) AS avg_days_to_settle FROM v_claim_dashboard WHERE settle_date IS NOT NULL GROUP BY policy_type ORDER BY avg_days_to_settle DESC"),
+    ("which adjuster has the most open claims",
+     "SELECT name, open_claims FROM v_adjuster_workload ORDER BY open_claims DESC LIMIT 5"),
+    ("total amount settled for each claim category",
+     "SELECT c.category, SUM(s.amount) AS total_settled FROM SETTLEMENT s JOIN CLAIM c ON c.claim_id = s.claim_id GROUP BY c.category ORDER BY total_settled DESC"),
+]
+
+
+def _fallback_sql(question: str) -> str:
+    """Template whose question shares the most words with the asker's question (used when no LLM is available)."""
+    words = set(re.findall(r"[a-z]+", question.lower())) - {"the", "a", "of", "by", "in", "for", "is", "are", "how", "what", "which", "many", "each"}
+    best = max(NL_EXAMPLES, key=lambda ex: len(words & set(re.findall(r"[a-z]+", ex[0]))))
+    return best[1]
 
 
 def nl_to_sql(question: str, schema_text: str) -> str:
-    return "SELECT COUNT(*) AS total_claims FROM CLAIM"
+    """One MySQL SELECT for the question. Uses the LLM when LLM_API_KEY is set, else the closest template.
+    The backend still validates the result (single SELECT, read-only user, row and time limits)."""
+    shots = "\n".join(f"Q: {q}\nSQL: {sql}" for q, sql in NL_EXAMPLES)
+    prompt = (
+        "You translate questions into ONE MySQL 8 SELECT statement for an insurance claims database.\n"
+        "Rules: output only SQL, no explanation, no code fences, no semicolon, no comments.\n"
+        f"Use only these tables and views:\n{schema_text}\n"
+        "Categories: accident, theft, hospitalisation, fire, flood, travel_loss, death, other.\n"
+        "Claim statuses: filed, under_review, info_requested, approved, rejected, settled.\n"
+        "High fraud means fraud_score >= 0.7. 'This year' means YEAR(filed_date) = YEAR(CURDATE()).\n"
+        "Prefer the view v_claim_dashboard for questions about claims.\n\n"
+        f"{shots}\n\nQ: {question}\nSQL:"
+    )
+    out = _llm(prompt)
+    if out:
+        out = re.sub(r"^```(?:sql)?\s*|\s*```$", "", out.strip(), flags=re.I).strip().rstrip(";")
+        if out.upper().startswith(("SELECT", "WITH")):
+            return out
+    return _fallback_sql(question)
 
 
 __all__ = ["CATEGORIES", "URGENCIES", "ENTITY_LABELS", "EMBED_DIM", "fraud_level", "preprocess", "classify",
-           "extract_entities", "embed", "find_duplicate", "score_fraud", "ocr", "nl_to_sql"]
+           "extract_entities", "embed", "find_duplicate", "score_fraud", "ocr", "bill_total", "nl_to_sql", "NL_EXAMPLES"]
