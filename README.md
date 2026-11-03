@@ -42,12 +42,20 @@ dup = paraphrase(row["text"])           # reworded copy for planting duplicate f
 ```
 Stage-ready English, Kannada and Hindi narratives: `ml/data/demo_narratives.md`.
 
-## Train the claim classifier (B)
+## Train the models (B)
 ```bash
 cd ml
-pip install scikit-learn pandas joblib matplotlib
-python train_classifier.py        # ~30 s; writes models/*.joblib and reports/metrics.json + confusion matrix
-python test_contract.py           # must still print: icms_ml contract OK
+pip install -e .                      # installs scikit-learn, pandas, numpy, joblib
+pip install spacy matplotlib
+python -m spacy download en_core_web_sm
+python train_classifier.py            # category + urgency   (~30 s)
+python data/generate_fraud_data.py    # labelled claims (replace with A's export later)
+python train_fraud.py                 # explainable fraud model (~2 s)
+python train_embedder.py              # duplicate detector + threshold (~15 s)
+python test_contract.py               # must print: icms_ml contract OK
 ```
+All trained models are committed in `ml/models/`, so A never has to train. Results land in `ml/reports/metrics.json`
+and three report-ready charts in `ml/reports/`.
+
 Kannada/Hindi translation uses Gemini when `LLM_API_KEY` is set (free key: aistudio.google.com).
 Without a key, a keyword fallback still classifies those narratives (confidence 0.5).

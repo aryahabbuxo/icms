@@ -99,5 +99,39 @@
     "critical_recall": 0.953
   },
   "test_size": 900,
-  "trained_at": "2026-10-30T19:05:41"
+  "trained_at": "2026-10-30T19:05:41",
+  "fraud": {
+    "model": "logistic_regression_balanced",
+    "explainable": true,
+    "roc_auc": 0.908,
+    "pr_auc": 0.595,
+    "precision_at_high": 0.412,
+    "recall_at_high": 0.69,
+    "recall_at_medium_or_high": 0.81,
+    "genuine_flagged_high_pct": 0.077,
+    "baseline_model": "hist_gradient_boosting (black box)",
+    "baseline_roc_auc": 0.946,
+    "fraud_rate": 0.072,
+    "test_size": 1600,
+    "coefficients": {
+      "amount_ratio": 0.961,
+      "policy_age_days": -0.79,
+      "days_incident_to_filing": 0.766,
+      "claims_on_policy_last_year": 0.931,
+      "claims_by_customer_total": -0.134,
+      "premium_payments_missed": 0.652,
+      "max_similarity": 0.797
+    }
+  },
+  "duplicate": {
+    "embedder": "tfidf_word+char -> svd384 (LSA)",
+    "threshold": 0.85,
+    "precision": 0.942,
+    "recall": 0.98,
+    "f1": 0.961,
+    "pairs": 400,
+    "mean_sim_duplicates": 0.94,
+    "mean_sim_different": 0.654,
+    "threshold_same_customer": 0.75
+  }
 }

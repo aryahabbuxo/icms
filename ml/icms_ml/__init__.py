@@ -1,8 +1,8 @@
 """ICMS ML package. Signatures follow the Shared Spec ML contract and must not change.
 
 Status
-    REAL   preprocess (PII masking + kn/hi translation), classify (trained TF-IDF + LogReg)
-    STUB   extract_entities, embed, find_duplicate, score_fraud, ocr, nl_to_sql  (replaced next)
+    REAL   preprocess, classify, score_fraud, extract_entities, embed, find_duplicate
+    STUB   ocr, nl_to_sql  (replaced next)
 
 Models load lazily, once, on first use (A's backend can import this package instantly).
 """
@@ -106,23 +106,77 @@ def classify(text: str) -> dict:
 
 # --------------------------------------------------------------------------- stubs (replaced in the next modules)
 def extract_entities(text: str) -> list[dict]:
-    return [{"text": "Bengaluru", "label": "LOC"}]
+    """[{"text", "label"}] using regex + Indian gazetteer + spaCy (spaCy optional)."""
+    from .ner import extract
+    return extract(text)
+
+
+# --------------------------------------------------------------------------- embeddings + duplicates
+@lru_cache(maxsize=1)
+def _embedder():
+    import joblib
+    path = MODELS_DIR / "embedder_lsa.joblib"
+    return joblib.load(path)["pipeline"] if path.exists() else None
+
+
+@lru_cache(maxsize=1)
+def _dup_threshold() -> float:
+    try:
+        return float(json.loads((MODELS_DIR.parent / "reports" / "metrics.json").read_text())["duplicate"]["threshold"])
+    except Exception:
+        return 0.86
 
 
 def embed(text: str) -> list[float]:
-    return [0.0] * EMBED_DIM
+    """384 floats, L2-normalised (offline LSA embedder trained by train_embedder.py)."""
+    model = _embedder()
+    if model is None:
+        return [0.0] * EMBED_DIM
+    return [round(float(x), 6) for x in model.transform([text])[0]]
 
 
-def find_duplicate(embedding: list[float], candidates: list[dict], threshold: float = 0.85) -> dict:
-    """candidates = [{"claim_id": int, "embedding": [...]}]"""
-    return {"is_duplicate": False, "similar_claim_id": None, "similarity": 0.0}
+SAME_CUSTOMER_THRESHOLD = 0.75   # policy choice: re-filing one's own old claim is the main duplicate-fraud pattern
+
+
+def find_duplicate(embedding: list[float], candidates: list[dict], threshold: float | None = None) -> dict:
+    """candidates = [{"claim_id": int, "embedding": [...], "same_customer": bool (optional)}].
+
+    Cosine similarity = dot product (vectors are normalised). A claim is a duplicate when its similarity to an
+    earlier claim reaches the threshold: the calibrated value from train_embedder.py (about 0.85) for any claim,
+    or 0.75 when the earlier claim belongs to the same customer. A flag never rejects a claim; it raises the
+    fraud score and routes the claim to a senior adjuster.
+    """
+    import numpy as np
+    threshold = _dup_threshold() if threshold is None else threshold
+    valid = [c for c in candidates if c.get("embedding") and len(c["embedding"]) == len(embedding)]
+    if not valid or not any(embedding):
+        return {"is_duplicate": False, "similar_claim_id": None, "similarity": 0.0}
+    sims = np.asarray([c["embedding"] for c in valid], dtype=np.float32) @ np.asarray(embedding, dtype=np.float32)
+    limits = np.asarray([min(threshold, SAME_CUSTOMER_THRESHOLD) if c.get("same_customer") else threshold for c in valid])
+    over = sims - limits
+    i = int(over.argmax()) if (over >= 0).any() else int(sims.argmax())
+    best, dup = round(float(sims[i]), 3), bool(over[i] >= 0)
+    return {"is_duplicate": dup, "similar_claim_id": valid[i]["claim_id"] if dup else None, "similarity": best}
+
+
+@lru_cache(maxsize=1)
+def _fraud_model():
+    import joblib
+    path = MODELS_DIR / "fraud_lr.joblib"
+    return joblib.load(path) if path.exists() else None
 
 
 def score_fraud(features: dict) -> dict:
-    score = 0.35
-    return {"score": score, "level": fraud_level(score), "reasons": [
-        {"feature": "amount_ratio", "value": features.get("amount_ratio", 0.4), "impact": 1.0,
-         "message": "Claimed amount is 40% of the sum insured"}]}
+    """{"score", "level", "reasons": [top 3 {"feature","value","impact","message"}]} from the explainable LR model."""
+    from .fraud import CAT, NUM, explain, prepare
+    f = prepare(features)
+    art = _fraud_model()
+    if art is None:   # model file missing: neutral score so filing never fails
+        return {"score": 0.5, "level": "medium", "reasons": []}
+    import pandas as pd
+    pipe = art["pipeline"]
+    score = round(float(pipe.predict_proba(pd.DataFrame([f])[NUM + CAT])[0, 1]), 3)
+    return {"score": score, "level": fraud_level(score), "reasons": explain(pipe, f, score)}
 
 
 def ocr(image_bytes: bytes) -> str:
