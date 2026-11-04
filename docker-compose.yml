@@ -1,0 +1,31 @@
+services:
+  mysql:
+    image: mysql:8.0
+    container_name: icms-mysql
+    command: --event-scheduler=ON --default-authentication-plugin=mysql_native_password
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+    ports: ["${MYSQL_HOST_PORT:-3306}:3306"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      # Runs 01..06 *.sql on first start only. Use `make demo-reset` afterwards.
+      - ./db:/docker-entrypoint-initdb.d:ro
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "localhost", "-uroot", "-proot"]
+      interval: 5s
+      retries: 20
+  mongo:
+    image: mongo:7
+    container_name: icms-mongo
+    ports: ["27017:27017"]
+    volumes: [mongo_data:/data/db]
+  mongo-express:
+    image: mongo-express
+    container_name: icms-mongo-express
+    depends_on: [mongo]
+    environment:
+      ME_CONFIG_MONGODB_URL: mongodb://mongo:27017
+    ports: ["8081:8081"]
+volumes:
+  mysql_data:
+  mongo_data:
