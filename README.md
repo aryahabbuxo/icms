@@ -71,3 +71,16 @@ A ready-made demo bill for the upload step: `ml/data/demo_bill.png` (total Rs 85
 ## Mock mode vs real backend
 `frontend/.env`: `VITE_USE_MOCKS=true` runs the whole demo in the browser (no database needed).
 Set it to `false` once A's FastAPI server is running on port 8000.
+
+## Run the full system (real database + backend)
+Docker Desktop must be running ("Engine running"). From the `icms` folder, in PowerShell:
+```
+ml\.venv\Scripts\activate                  # one Python environment for ML, seed and backend
+pip install -r backend\requirements.txt -r db\seed\requirements.txt
+docker compose up -d                          # MySQL 8 + MongoDB
+.\demo-reset.ps1                              # schema, triggers, procedures, views, seed (~90 s)
+cd backend
+uvicorn app.main:app --reload --port 8000     # API docs: http://localhost:8000/docs
+```
+In a second terminal: set `VITE_USE_MOCKS=false` in `frontend\.env`, then `cd frontend` and `npm run dev`.
+Run `.\demo-reset.ps1` again before every rehearsal and before the demo; it restores every demo fixture.

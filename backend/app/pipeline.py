@@ -38,7 +38,7 @@ SELECT c.claimed_amount, p.sum_insured, c.claimed_amount / p.sum_insured AS amou
   (SELECT COUNT(*) FROM CLAIM x WHERE x.policy_id = c.policy_id AND x.claim_id <> c.claim_id
      AND x.filed_date >= DATE_SUB(c.filed_date, INTERVAL 365 DAY)) AS claims_on_policy_last_year,
   (SELECT COUNT(*) FROM CLAIM x JOIN POLICY px ON px.policy_id = x.policy_id
-     WHERE px.customer_id = p.customer_id AND x.claim_id <> c.claim_id) AS claims_by_customer_total,
+     WHERE px.customer_id = p.customer_id) AS claims_by_customer_total,
   (SELECT COUNT(*) FROM PREMIUM_PAYMENT pp WHERE pp.policy_id = c.policy_id AND pp.status = 'failed') AS premium_payments_missed
 FROM CLAIM c JOIN POLICY p ON p.policy_id = c.policy_id WHERE c.claim_id = :cid
 """
@@ -88,6 +88,8 @@ def file_claim(user: dict, req) -> dict:
             q = {"embedding": {"$exists": True, "$ne": []}, "claim_id": {"$ne": claim_id}}
             recent = list(db_mongo.narratives.find(q, {"_id": 0, "claim_id": 1, "embedding": 1}).sort("created_at", -1).limit(500))
             mine = list(db_mongo.narratives.find({**q, "claim_id": {"$in": own_ids}}, {"_id": 0, "claim_id": 1, "embedding": 1})) if own_ids else []
+            for m in mine:  # the customer's own earlier claims get the stricter same-customer threshold
+                m["same_customer"] = True
             return {c["claim_id"]: c for c in recent + mine}.values()
         candidates = list(mongo_try(load, [], label="load candidates"))
         dup = safe(ml.find_duplicate, dup, embedding, candidates, label="duplicate")

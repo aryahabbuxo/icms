@@ -1,13 +1,14 @@
 import json
 from datetime import date
 from typing import Literal, Optional
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, File, Query, UploadFile
 from pydantic import BaseModel, Field
 from sqlalchemy import text
 from .. import db_mongo
 from ..db_mysql import get_conn
 from ..errors import ApiError
-from ..pipeline import file_claim, mongo_try
+from .. import ml
+from ..pipeline import file_claim, mongo_try, safe
 from ..security import current_user, require_role
 
 router = APIRouter(prefix="/claims", tags=["claims"])
@@ -90,7 +91,9 @@ def list_claims(status: Optional[str] = None, category: Optional[str] = None,
         where.append("fraud_score >= :mf"); params["mf"] = min_fraud
     with get_conn(user["email"]) as conn:
         rows = conn.execute(text(
-            f"SELECT * FROM v_claim_dashboard WHERE {' AND '.join(where)} ORDER BY claim_id DESC LIMIT :lim OFFSET :off"),
+            f"SELECT d.*, (SELECT MAX(a.approved_amount) FROM ASSESSMENT a WHERE a.claim_id = d.claim_id "
+            f"AND a.decision = 'approve') AS approved_amount FROM v_claim_dashboard d "
+            f"WHERE {' AND '.join(where)} ORDER BY claim_id DESC LIMIT :lim OFFSET :off"),
             params).mappings().all()
     return [dict(r) for r in rows]
 
@@ -110,14 +113,29 @@ def claim_detail(claim_id: int, user: dict = Depends(current_user)):
             "SELECT a.*, j.name AS adjuster_name FROM ASSESSMENT a JOIN ADJUSTER j ON j.adjuster_id = a.adjuster_id "
             "WHERE a.claim_id = :c ORDER BY a.review_date"), {"c": claim_id}).mappings().all()
         settlement = conn.execute(text("SELECT * FROM SETTLEMENT WHERE claim_id = :c"), {"c": claim_id}).mappings().first()
+        adjuster_name = conn.execute(text("SELECT name FROM ADJUSTER WHERE adjuster_id = :a"),
+                                     {"a": c.get("assigned_adjuster_id")}).scalar()
         timeline = conn.execute(text(
-            "SELECT log_no, old_status, new_status, changed_at, changed_by FROM CLAIM_STATUS_LOG WHERE claim_id = :c ORDER BY log_no"),
+            "SELECT log_no, old_status, new_status, changed_at, changed_by, curr_hash FROM CLAIM_STATUS_LOG WHERE claim_id = :c ORDER BY log_no"),
             {"c": claim_id}).mappings().all()
     narrative = mongo_try(lambda: db_mongo.narratives.find_one({"claim_id": claim_id}, {"_id": 0, "embedding": 0}), None, "narrative")
-    docs = mongo_try(lambda: list(db_mongo.documents.find({"claim_id": claim_id}, {"_id": 0, "ocr_text": 0})), [], "documents")
-    fraud = mongo_try(lambda: db_mongo.fraud_explanations.find_one({"claim_id": claim_id}, {"_id": 0}, sort=[("scored_at", -1)]), None, "fraud")
-    return {**c, "policy": dict(policy) if policy else None, "customer": dict(customer) if customer else None,
-            "narrative": narrative, "documents": docs, "fraud": fraud,
+    docs = mongo_try(lambda: list(db_mongo.documents.find({"claim_id": claim_id}, {"_id": 0, "gridfs_id": 0})), [], "documents")
+    fx = mongo_try(lambda: db_mongo.fraud_explanations.find_one({"claim_id": claim_id}, {"_id": 0}, sort=[("scored_at", -1)]), None, "fraud")
+    score = float(c["fraud_score"]) if c.get("fraud_score") is not None else 0.0
+    fraud = {"score": score, "level": "high" if score >= 0.7 else "medium" if score >= 0.4 else "low",
+             "reasons": (fx or {}).get("top_reasons") or c.get("fraud_reasons") or []}
+    if not narrative:  # seeded claim without a Mongo document: fall back to the SQL summary
+        narrative = {"original_text": c.get("description_summary") or "", "language": "en",
+                     "nlp": {"category": c.get("category"), "urgency": c.get("urgency"),
+                             "confidence": float(c["nlp_confidence"]) if c.get("nlp_confidence") is not None else None,
+                             "entities": []}}
+    sim = next((float(r.get("value", 0)) for r in fraud["reasons"] if r.get("feature") == "max_similarity"),
+               ((fx or {}).get("features") or {}).get("max_similarity", 0.0))
+    duplicate = {"is_duplicate": c.get("duplicate_of") is not None, "similar_claim_id": c.get("duplicate_of"),
+                 "similarity": round(float(sim or 0.0), 3)}
+    return {**c, "adjuster_name": adjuster_name, "policy": dict(policy) if policy else None,
+            "customer": dict(customer) if customer else None,
+            "narrative": narrative, "documents": docs, "fraud": fraud, "duplicate": duplicate,
             "assessments": [dict(a) for a in assessments], "settlement": dict(settlement) if settlement else None,
             "timeline": [dict(t) for t in timeline]}
 
@@ -138,7 +156,8 @@ def verify_chain(claim_id: int, user: dict = Depends(require_role("admin"))):
     out, broken = [], None
     for r in rows:
         ok = r["stored_hash"] == r["recomputed_hash"] and bool(r["link_ok"])
-        item = {"log_no": r["log_no"], "old_status": r["old_status"], "new_status": r["new_status"], "ok": ok}
+        item = {"log_no": r["log_no"], "old_status": r["old_status"], "new_status": r["new_status"], "ok": ok,
+                "changed_at": r.get("changed_at"), "changed_by": r.get("changed_by")}
         if not ok:
             item.update(stored_hash=r["stored_hash"], recomputed_hash=r["recomputed_hash"])
             broken = broken if broken is not None else r["log_no"]
@@ -178,3 +197,28 @@ def assign(claim_id: int, req: AssignReq, user: dict = Depends(require_role("adm
         au = conn.execute(text("SELECT user_id FROM APP_USER WHERE adjuster_id = :a"), {"a": req.adjuster_id}).scalar()
         notify(conn, au, claim_id, f"Claim #{claim_id} was assigned to you by an admin.")
     return {"claim_id": claim_id, "assigned_adjuster_id": req.adjuster_id}
+
+
+ALLOWED_TYPES = {"image/jpeg", "image/png", "image/webp", "application/pdf"}
+
+
+@router.post("/{claim_id}/documents", status_code=201)
+async def upload_document(claim_id: int, file: UploadFile = File(...), user: dict = Depends(current_user)):
+    data = await file.read()
+    if len(data) > 5 * 1024 * 1024:
+        raise ApiError(422, "FILE_TOO_LARGE", "Files must be 5 MB or smaller")
+    if file.content_type not in ALLOWED_TYPES:
+        raise ApiError(422, "FILE_TYPE", "Upload a JPG, PNG or PDF")
+    with get_conn(user["email"]) as conn:
+        load_claim(conn, claim_id, user)
+    name = file.filename or "document"
+    lower = name.lower()
+    doc_type = ("fir" if "fir" in lower else "bill" if any(w in lower for w in ("bill", "invoice", "estimate", "receipt"))
+                else "photo" if file.content_type.startswith("image/") else "other")
+    ocr_text = safe(ml.ocr, "", data, label="ocr") if file.content_type.startswith("image/") else ""
+    gid = mongo_try(lambda: db_mongo.fs.put(data, filename=name, content_type=file.content_type, claim_id=claim_id),
+                    None, "gridfs")
+    doc = {"claim_id": claim_id, "doc_type": doc_type, "filename": name, "gridfs_id": gid,
+           "ocr_text": ocr_text, "uploaded_at": __import__("datetime").datetime.now()}
+    mongo_try(lambda: db_mongo.documents.insert_one(dict(doc)), None, "save document")
+    return {"claim_id": claim_id, "doc_type": doc_type, "filename": name, "ocr_text": ocr_text}

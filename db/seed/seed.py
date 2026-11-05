@@ -416,6 +416,20 @@ def main():
     fixture_claim(9102, p9003, 20, 60000, "hospitalisation",
                   "My knee needed surgery after a fall and I was admitted to Fortis Hospital for 3 days. The bill is Rs 60,000.",
                   0.25, 2, "approve", 40000)
+    # 9104: a high-risk claim waiting with Ramesh (NOT senior) for the SENIOR_REQUIRED trigger demo
+    cur.execute("SELECT adjuster_id FROM ADJUSTER WHERE name = 'Ramesh K' LIMIT 1")
+    ramesh = (cur.fetchone() or [1])[0]
+    mp = next(p for p in all_pol if p["type"] == "motor" and p["plan"] == "active" and p["start"] <= TODAY - D(60))
+    amt9104 = rnd(mp["sum"] * 0.32)
+    text9104 = ("My Pulsar KA 03 HJ 7781 was stolen from the basement parking of our apartment in HSR Layout. "
+                f"An FIR has been filed at HSR Layout police station. The bike was worth around Rs {amt9104:,}.")
+    reasons9104 = [{"feature": "days_incident_to_filing", "value": 22, "impact": 0.55, "message": "Reported 22 days after the incident"},
+                   {"feature": "premium_payments_missed", "value": 2, "impact": 0.45, "message": "2 premium payments failed before this claim"}]
+    cur.execute("INSERT INTO CLAIM (claim_id,policy_id,incident_date,filed_date,claimed_amount,description_summary,category,urgency,fraud_score,fraud_reasons) "
+                "VALUES (9104,%s,%s,%s,%s,%s,'theft','medium',0.81,%s)",
+                (mp["id"], TODAY - D(23), TODAY - D(1), amt9104, text9104, json.dumps(reasons9104)))
+    cur.execute("UPDATE CLAIM SET assigned_adjuster_id=%s, status='under_review' WHERE claim_id=9104", (ramesh,))
+    narratives[9104] = text9104
     cur.execute("UPDATE POLICY SET status='lapsed' WHERE policy_id=9002")
     conn.commit()
 
@@ -448,8 +462,19 @@ def main():
         mc = MongoClient(MONGO_URL, serverSelectionTimeoutMS=3000)
         mdb = mc[MONGO_DB]
         mdb.claim_narratives.delete_many({})
-        now = dt.datetime.utcnow()
+        now = dt.datetime.now(dt.timezone.utc).replace(tzinfo=None)
         docs = [{"claim_id": cid, "original_text": t, "language": "en", "created_at": now} for cid, t in narratives.items()]
+        # Embeddings: the live duplicate check only compares claims that have one, so the seed must add them.
+        try:
+            import icms_ml
+            model = icms_ml._embedder()
+            if model is not None:
+                vecs = model.transform([d["original_text"] for d in docs])
+                for d, v in zip(docs, vecs):
+                    d["embedding"] = [round(float(x), 6) for x in v]
+                print(f"embeddings: {len(docs)} narratives")
+        except Exception as e:
+            print(f"WARNING: no embeddings ({e.__class__.__name__}: {e}); install icms_ml (pip install -e ml)")
         for i in range(0, len(docs), 1000):
             mdb.claim_narratives.insert_many(docs[i:i + 1000])
         for coll in ("claim_narratives", "claim_documents", "fraud_explanations"):

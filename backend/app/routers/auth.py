@@ -11,7 +11,7 @@ router = APIRouter(prefix="/auth", tags=["auth"])
 
 USER_SQL = """
 SELECT u.user_id, u.email, u.password_hash, u.role, u.customer_id, u.agent_id, u.adjuster_id, u.is_active,
-       COALESCE(c.name, a.name, j.name, 'Admin') AS name
+       COALESCE(c.name, a.name, j.name, 'Admin') AS name, COALESCE(j.is_senior, 0) AS is_senior
 FROM APP_USER u
 LEFT JOIN CUSTOMER c ON c.customer_id = u.customer_id
 LEFT JOIN AGENT a ON a.agent_id = u.agent_id
@@ -36,7 +36,8 @@ class RegisterReq(BaseModel):
 
 def public_user(row) -> dict:
     return {"user_id": row["user_id"], "role": row["role"], "name": row["name"], "email": row["email"],
-            "customer_id": row["customer_id"], "agent_id": row["agent_id"], "adjuster_id": row["adjuster_id"]}
+            "customer_id": row["customer_id"], "agent_id": row["agent_id"], "adjuster_id": row["adjuster_id"],
+            "is_senior": bool(row["is_senior"])}
 
 
 @router.post("/login")
