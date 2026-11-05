@@ -2,7 +2,7 @@ services:
   mysql:
     image: mysql:8.0
     container_name: icms-mysql
-    command: --event-scheduler=ON --default-authentication-plugin=mysql_native_password
+    command: --event-scheduler=ON --default-time-zone=+05:30
     environment:
       MYSQL_ROOT_PASSWORD: root
     ports: ["${MYSQL_HOST_PORT:-3306}:3306"]
