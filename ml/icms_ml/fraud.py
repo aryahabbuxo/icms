@@ -8,6 +8,19 @@ from __future__ import annotations
 NUM = ["amount_ratio", "policy_age_days", "days_incident_to_filing", "claims_on_policy_last_year",
        "claims_by_customer_total", "premium_payments_missed", "max_similarity"]
 CAT = ["category"]
+# Days and counts matter most near zero (9 vs 30 days after purchase), so they are log-scaled before standardising.
+LOG_COLS = ["policy_age_days", "days_incident_to_filing", "claims_on_policy_last_year",
+            "claims_by_customer_total", "premium_payments_missed"]
+
+
+def log_scale(X):
+    """Module-level so joblib can reload the trained pipeline in the backend."""
+    import numpy as np
+    X = np.asarray(X, dtype=float).copy()
+    for i, name in enumerate(NUM):
+        if name in LOG_COLS:
+            X[:, i] = np.log1p(np.clip(X[:, i], 0, None))
+    return X
 MIN_CONTRIBUTION = 0.35   # log-odds; smaller pushes are not worth showing as a "reason"
 
 

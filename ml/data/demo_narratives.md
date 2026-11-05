@@ -3,11 +3,11 @@
 ## English: accident, high risk (filed on policy 9001)
 My Activa KA 01 AB 1234 was hit by a car near Silk Board junction on 21 October around 8 pm. I got a fractured wrist and was taken to Manipal Hospital. The vehicle is badly damaged and the garage estimate for repair is Rs 85000. Kindly process my claim at the earliest.
 
-## Claim 9101 original (Person A seeds EXACTLY this text for Priya's settled claim)
-My bike skidded on a pothole near Outer Ring Road and I fell on the road. The vehicle is badly damaged and the garage estimate for repair is Rs 48,000. Please process this soon.
+## Claim 9101 original (seeded by A's seed.py for Priya, settled)
+My bike skidded on the wet road on Outer Ring Road near Marathahalli and I fell. The front fork and headlight are damaged. The workshop bill is Rs 28,000 and the FIR copy is attached.
 
-## Duplicate attempt (reworded copy of claim 9101; should be flagged)
-Regarding my claim: my two-wheeler slipped on a pothole close to Outer Ring Road and I fell down on the road. The scooter is badly damaged and the garage quote for fixing is Rs 47,200. Kindly process this soon.
+## Duplicate attempt (reworded copy of claim 9101; must be flagged, similarity ~0.81)
+Regarding my claim: my two-wheeler slipped on the wet road on Outer Ring Road close to Marathahalli and I fell down. The front fork and headlight are smashed. The garage bill is Rs 27,500 and the FIR copy is attached.
 
 ## Kannada (language = kn): two-wheeler theft
 ನನ್ನ ಬೈಕ್ KA 05 MK 4421 ಅನ್ನು ಅಕ್ಟೋಬರ್ 18 ರಂದು ಜಯನಗರದಲ್ಲಿರುವ ನನ್ನ ಕಚೇರಿಯ ಹೊರಗೆ ನಿಲ್ಲಿಸಿದ್ದೆ, ಅಲ್ಲಿಂದ ಕಳ್ಳತನವಾಗಿದೆ. ಜಯನಗರ ಪೊಲೀಸ್ ಠಾಣೆಯಲ್ಲಿ ಎಫ್‌ಐಆರ್ ದಾಖಲಿಸಲಾಗಿದೆ. ದಯವಿಟ್ಟು ನನ್ನ ಕ್ಲೈಮ್ ಅನ್ನು ಬೇಗ ಪರಿಶೀಲಿಸಿ.

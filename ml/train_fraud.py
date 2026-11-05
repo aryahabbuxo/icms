@@ -3,7 +3,8 @@
 Run from the ml/ folder:
     python train_fraud.py
 
-Input   data/claims_labeled.csv   (A's export from MySQL; until then data/generate_fraud_data.py makes one)
+Input   data/fraud_training.csv   (built from the real database by data/build_fraud_features.py)
+        falls back to data/claims_labeled.csv in the synthetic format from data/generate_fraud_data.py
 Output  models/fraud_lr.joblib, reports/metrics.json ("fraud" section), reports/fraud_drivers.png
 
 Why logistic regression (viva answer)
@@ -29,19 +30,20 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import average_precision_score, precision_score, recall_score, roc_auc_score
 from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
-from sklearn.preprocessing import OneHotEncoder, StandardScaler
+from sklearn.preprocessing import FunctionTransformer, OneHotEncoder, StandardScaler
 
 sys.path.insert(0, str(Path(__file__).parent))
-from icms_ml.fraud import CAT, NUM  # noqa: E402
+from icms_ml.fraud import CAT, NUM, log_scale  # noqa: E402
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt  # noqa: E402
 
 ROOT = Path(__file__).parent
-DATA = ROOT / "data" / "claims_labeled.csv"
+REAL = ROOT / "data" / "fraud_training.csv"
+SYNTH = ROOT / "data" / "claims_labeled.csv"
 SEED = 42
-PRETTY = {"amount_ratio": "Amount vs sum insured", "policy_age_days": "Policy age (days)",
-          "days_incident_to_filing": "Days to report", "claims_on_policy_last_year": "Claims on policy, last year",
+PRETTY = {"amount_ratio": "Amount vs sum insured", "policy_age_days": "Policy age (log days)",
+          "days_incident_to_filing": "Days to report (log)", "claims_on_policy_last_year": "Claims on policy, last year",
           "claims_by_customer_total": "Customer's total claims", "premium_payments_missed": "Missed premiums",
           "max_similarity": "Similarity to earlier claim"}
 
@@ -64,15 +66,21 @@ def drivers_chart(lr_pipeline, path: Path) -> None:
 
 
 def main() -> None:
+    DATA = REAL if REAL.exists() else SYNTH
     if not DATA.exists():
-        raise SystemExit(f"{DATA} not found. Run: python data/generate_fraud_data.py")
+        raise SystemExit("No training data. After demo-reset run: python data/build_fraud_features.py")
     df = pd.read_csv(DATA)
+    missing = [c for c in NUM + CAT + ["is_fraud"] if c not in df.columns]
+    if missing:
+        raise SystemExit(f"{DATA.name} is missing columns {missing}. Run: python data/build_fraud_features.py")
+    print(f"Training on {DATA.name}")
     X, y = df[NUM + CAT], df["is_fraud"]
     X_tr, X_te, y_tr, y_te = train_test_split(X, y, test_size=0.2, stratify=y, random_state=SEED)
     print(f"Loaded {len(df)} claims, {y.mean():.1%} fraud. Train {len(X_tr)}, test {len(X_te)}")
 
     lr = Pipeline([
-        ("pre", ColumnTransformer([("num", StandardScaler(), NUM), ("cat", OneHotEncoder(handle_unknown="ignore"), CAT)])),
+        ("pre", ColumnTransformer([("num", Pipeline([("log", FunctionTransformer(log_scale)), ("z", StandardScaler())]), NUM),
+                                   ("cat", OneHotEncoder(handle_unknown="ignore"), CAT)])),
         ("lr", LogisticRegression(max_iter=3000, class_weight="balanced")),
     ]).fit(X_tr, y_tr)
     p = lr.predict_proba(X_te)[:, 1]

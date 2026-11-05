@@ -117,22 +117,21 @@ REWORD = {"hit": "struck", "near": "close to", "badly": "severely", "bill": "inv
           "broke into": "entered", "filed": "lodged"}
 
 
+# ---- narratives: use B's generator (ml/data/generate_narratives.py) so stories vary and copies are real rewordings
+import os as _os, sys as _sys
+_sys.path.insert(0, _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "..", "ml", "data"))
+from generate_narratives import CATEGORIES as _GEN_CATS, generate as _gen, paraphrase as _para
+
+
 def narrative(cat, amount):
-    t = random.choice(TEMPLATES[cat])
-    text = t.format(
-        veh=random.choice(VEHICLES), place=random.choice(PLACES), hosp=random.choice(HOSPITALS),
-        ail=random.choice(AILMENTS), prop=random.choice(PROPS), n=ri(2, 9), amt=f"{int(amount):,}",
-        d=(TODAY - D(ri(5, 60))).strftime("%d %b"),
-    )
+    text = _gen(cat if cat in _GEN_CATS else "other", rng=random)["text"]
     if random.random() < 0.3:
         text += f" You can reach me on {fake.msisdn()[-10:]}."
     return text
 
 
 def reword(text):
-    for k, v in REWORD.items():
-        text = re.sub(rf"\b{re.escape(k)}\b", v, text)
-    return "Reporting the incident: " + text
+    return _para(text, seed=random.randint(0, 10**9))
 
 
 def phone():

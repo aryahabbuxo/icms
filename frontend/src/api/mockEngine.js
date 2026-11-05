@@ -58,11 +58,11 @@ export function simulateFileClaim(body) {
 
   const text = body.narrative || "";
   const nlp = { ...classify(text), entities: entities(text) };
-  const dup = /pothole/i.test(text) && /outer ring road/i.test(text);
+  const dup = /outer ring road/i.test(text) && /(pothole|marathahalli)/i.test(text) && /(slipped|two-wheeler|reworded|regarding my claim)/i.test(text);
   const ratio = body.claimed_amount / policy.sum_insured;
   const score = Math.min(0.97, 0.12 + (dup ? 0.6 : 0) + (ratio > 0.4 ? 0.22 : 0) + Math.random() * 0.06);
   const reasons = [
-    dup && { feature: "max_similarity", value: 0.8, impact: 0.55, message: "Description is 80% similar to an earlier claim" },
+    dup && { feature: "max_similarity", value: 0.81, impact: 0.55, message: "Description is 81% similar to an earlier claim" },
     ratio > 0.4 && { feature: "amount_ratio", value: ratio, impact: 0.3, message: `Claimed amount is ${Math.round(ratio * 100)}% of the sum insured` },
     { feature: "days_incident_to_filing", value: 1, impact: 0.15, message: "Reported 1 day after the incident" },
   ].filter(Boolean).slice(0, 3);
@@ -72,7 +72,7 @@ export function simulateFileClaim(body) {
     claim_id: nextClaimId++, status: "under_review", nlp,
     fraud: { score: +score.toFixed(2), level: score >= 0.7 ? "high" : score >= 0.4 ? "medium" : "low",
       reasons: reasons.map((r) => ({ ...r, impact: +(r.impact / total).toFixed(2) })) },
-    duplicate: { is_duplicate: dup, similar_claim_id: dup ? 9101 : null, similarity: dup ? 0.8 : 0.33 },
+    duplicate: { is_duplicate: dup, similar_claim_id: dup ? 9101 : null, similarity: dup ? 0.81 : 0.33 },
     assigned_adjuster: score >= 0.7 ? { adjuster_id: 8, name: "Kavitha R" } : { adjuster_id: 7, name: "Ramesh K" },
   };
   const out = { ...mockClaimResult, ...result };
@@ -111,8 +111,8 @@ const nowIso = () => new Date().toISOString().slice(0, 19);
 const STORIES = {
   4870: ["I was admitted to Manipal Hospital with dengue fever and stayed for 6 days. The hospital bill came to Rs 1,26,000. All discharge papers and bills are attached.",
     [["Manipal Hospital", "HOSPITAL"], ["Rs 1,26,000", "MONEY"]]],
-  9101: ["My bike skidded on a pothole near Outer Ring Road and I fell on the road. The vehicle is badly damaged and the garage estimate for repair is Rs 48,000. Please process this soon.",
-    [["Outer Ring Road", "LOC"], ["Rs 48,000", "MONEY"]]],
+  9101: ["My bike skidded on the wet road on Outer Ring Road near Marathahalli and I fell. The front fork and headlight are damaged. The workshop bill is Rs 28,000 and the FIR copy is attached.",
+    [["Outer Ring Road", "LOC"], ["Marathahalli", "LOC"], ["Rs 28,000", "MONEY"]]],
   5009: ["My Pulsar KA 03 HJ 7781 was stolen from the basement parking of our apartment in HSR Layout. An FIR has been filed at HSR Layout police station. The total value is around Rs 64000.",
     [["KA 03 HJ 7781", "VEHICLE_NO"], ["HSR Layout", "LOC"], ["Rs 64000", "MONEY"]]],
   5007: ["A water tanker rammed into my Creta on Hosur Road on 19 October. My father was in the car and was taken to the ICU at Narayana Health. Garage estimate is Rs 1,42,000.",
